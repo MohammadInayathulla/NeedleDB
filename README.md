@@ -22,7 +22,7 @@ production vector databases actually work under the hood.
 
 ## Roadmap
 - [x] Day 1 — Distance metrics + Brute Force search
-- [ ] Day 2 — KD-Tree
+- [x] Day 2 — KD-Tree
 - [ ] Day 3 — HNSW
 - [ ] Day 4 — Unified VectorDB interface
 - [ ] Day 5 — FastAPI server
