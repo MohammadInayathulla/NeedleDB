@@ -23,7 +23,7 @@ production vector databases actually work under the hood.
 ## Roadmap
 - [x] Day 1 — Distance metrics + Brute Force search
 - [x] Day 2 — KD-Tree
-- [ ] Day 3 — HNSW
+- [x] Day 3 — HNSW (Hierarchical Navigable Small World)
 - [ ] Day 4 — Unified VectorDB interface
 - [ ] Day 5 — FastAPI server
 - [ ] Day 6 — Ollama embeddings
