@@ -20,12 +20,41 @@ production vector databases actually work under the hood.
 - Ollama (local embeddings + LLM)
 - Vanilla HTML/JS (frontend)
 
+## Quick Start
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the server
+python main.py
+```
+
+Server starts at http://localhost:8000
+Interactive docs at http://localhost:8000/docs
+
+## API Reference
+
+| Method   | Endpoint           | Description                          |
+|----------|--------------------|--------------------------------------|
+| GET      | /                  | API info                             |
+| GET      | /health            | Health check                         |
+| POST     | /vectors/insert    | Insert a vector                      |
+| DELETE   | /vectors/{id}      | Delete a vector                      |
+| GET      | /vectors           | List all vectors                     |
+| GET      | /vectors/{id}      | Get a single vector                  |
+| POST     | /search            | Search (hnsw / kdtree / brute_force) |
+| POST     | /benchmark         | Compare all 3 algorithms             |
+| GET      | /stats             | Database statistics                  |
+| GET      | /hnsw-info         | HNSW graph structure                 |
+| POST     | /demo/load         | Load 20 demo vectors                 |
+
 ## Roadmap
 - [x] Day 1 — Distance metrics + Brute Force search
 - [x] Day 2 — KD-Tree
 - [x] Day 3 — HNSW (Hierarchical Navigable Small World)
 - [x] Day 4 — Unified VectorDB interface + benchmark + demo data
-- [ ] Day 5 — FastAPI server
+- [x] Day 5 — FastAPI REST server
 - [ ] Day 6 — Ollama embeddings
 - [ ] Day 7 — Document store + chunking
 - [ ] Day 8 — RAG pipeline
