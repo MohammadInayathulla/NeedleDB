@@ -1,4 +1,7 @@
 import numpy as np
+from needledb.ollama_client import OllamaClient
+from needledb.document_db import DocumentDB
+from needledb.rag import RAGPipeline
 import uvicorn
 from typing import Any, Dict, List, Optional
 
@@ -29,7 +32,9 @@ app.add_middleware(
 # ── Single shared database instance ───────────────────────────────────────
 
 db = VectorDB(M=16, ef_construction=200, ef_search=50)
-
+ollama = OllamaClient()
+doc_db = DocumentDB(db=db, ollama=ollama)
+rag = RAGPipeline(doc_db=doc_db, ollama=ollama)
 
 # ── Request / Response models ──────────────────────────────────────────────
 # Pydantic validates every incoming request automatically.
@@ -231,6 +236,218 @@ def load_demo():
         "message": f"Loaded {count} demo vectors across 4 categories.",
         "total":   len(db),
     }
+
+# ── Ollama ─────────────────────────────────────────────────────────────
+
+@app.get("/status", tags=["Ollama"])
+def ollama_status():
+    """
+    Check if Ollama is running and both models are pulled.
+    Hit this first whenever you restart NeedleDB.
+    """
+    return ollama.status()
+
+
+@app.post("/embed", tags=["Ollama"])
+def embed_text(body: dict):
+    """
+    Embed any text into a 768D vector using nomic-embed-text.
+
+    This is the bridge between raw text and the vector index.
+    The returned vector can be passed directly to /search or /benchmark.
+
+    Example body:
+        { "text": "What is a binary search tree?" }
+
+    Returns:
+        {
+            "text"      : original text,
+            "dims"      : 768,
+            "vector"    : [0.023, -0.041, ...]   ← 768 floats
+        }
+    """
+    text = body.get("text", "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Field 'text' is required.")
+
+    try:
+        vector = ollama.embed(text)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    return {
+        "text":   text,
+        "dims":   len(vector),
+        "vector": vector,
+    }
+
+# ── Documents ──────────────────────────────────────────────────────────
+
+@app.post("/documents/add", tags=["Documents"])
+def add_document(body: dict):
+    """
+    Add a document — chunks it, embeds each chunk, inserts into VectorDB.
+
+    Example body:
+        {
+            "doc_id":     "python_intro",
+            "text":       "Python is a high-level programming language...",
+            "metadata":   { "title": "Python Intro", "source": "wikipedia" },
+            "chunk_size": 200,
+            "overlap":    40
+        }
+    """
+    doc_id     = body.get("doc_id",     "").strip()
+    text       = body.get("text",       "").strip()
+    metadata   = body.get("metadata",   {})
+    chunk_size = body.get("chunk_size", 200)
+    overlap    = body.get("overlap",    40)
+
+    if not doc_id:
+        raise HTTPException(status_code=400, detail="Field 'doc_id' is required.")
+    if not text:
+        raise HTTPException(status_code=400, detail="Field 'text' is required.")
+
+    try:
+        result = doc_db.add_document(
+            doc_id     = doc_id,
+            text       = text,
+            metadata   = metadata,
+            chunk_size = chunk_size,
+            overlap    = overlap,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    return result
+
+
+@app.delete("/documents/{doc_id}", tags=["Documents"])
+def delete_document(doc_id: str):
+    """Delete a document and all its chunk vectors."""
+    deleted = doc_db.delete_document(doc_id)
+    if not deleted:
+        raise HTTPException(
+            status_code = 404,
+            detail      = f"Document '{doc_id}' not found."
+        )
+    return {"deleted": doc_id}
+
+
+@app.get("/documents", tags=["Documents"])
+def list_documents():
+    """List all documents — id, metadata, chunk count."""
+    return {
+        "documents": doc_db.list_documents(),
+        "total":     len(doc_db),
+    }
+
+
+@app.get("/documents/{doc_id}", tags=["Documents"])
+def get_document(doc_id: str):
+    """Get a single document including full text and chunk IDs."""
+    doc = doc_db.get_document(doc_id)
+    if doc is None:
+        raise HTTPException(
+            status_code = 404,
+            detail      = f"Document '{doc_id}' not found."
+        )
+    return doc
+
+
+@app.post("/documents/search", tags=["Documents"])
+def search_documents(body: dict):
+    """
+    Semantic search over all document chunks using plain text query.
+
+    Embeds the query, finds nearest chunks, returns text + source info.
+    The results from this endpoint feed directly into the RAG pipeline
+    on Day 8 as the context for LLM answer generation.
+
+    Example body:
+        {
+            "query": "what is a binary search tree?",
+            "k": 5,
+            "metric": "cosine",
+            "algo": "hnsw"
+        }
+    """
+    query  = body.get("query",  "").strip()
+    k      = body.get("k",      5)
+    metric = body.get("metric", "cosine")
+    algo   = body.get("algo",   "hnsw")
+
+    if not query:
+        raise HTTPException(status_code=400, detail="Field 'query' is required.")
+    if len(doc_db) == 0:
+        raise HTTPException(
+            status_code = 400,
+            detail      = "No documents added yet. POST /documents/add first."
+        )
+
+    try:
+        return doc_db.search(query=query, k=k, metric=metric, algo=algo)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    
+# ── RAG ────────────────────────────────────────────────────────────────
+
+@app.post("/rag/ask", tags=["RAG"])
+def rag_ask(body: dict):
+    """
+    Ask a question against your documents — full RAG pipeline.
+
+    Steps internally:
+        1. Embeds your question (Ollama → 768D)
+        2. Finds top-k relevant chunks (HNSW search)
+        3. Builds a grounded prompt (context + question)
+        4. Generates an answer (llama3.2)
+        5. Returns answer + source chunks for transparency
+
+    Example body:
+        {
+            "question": "What is a binary search tree?",
+            "k": 5,
+            "metric": "cosine",
+            "algo": "hnsw"
+        }
+
+    Note: Requires Ollama running + both models pulled.
+          Add documents first via POST /documents/add.
+          Generation takes 10-30s on CPU — this is normal.
+    """
+    question = body.get("question", "").strip()
+    k        = body.get("k",        5)
+    metric   = body.get("metric",   "cosine")
+    algo     = body.get("algo",     "hnsw")
+
+    if not question:
+        raise HTTPException(
+            status_code = 400,
+            detail      = "Field 'question' is required."
+        )
+
+    if len(doc_db) == 0:
+        raise HTTPException(
+            status_code = 400,
+            detail      = "No documents in store. POST /documents/add first."
+        )
+
+    try:
+        result = rag.ask(
+            question = question,
+            k        = k,
+            metric   = metric,
+            algo     = algo,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    return result
 
 
 # ── Entry point ────────────────────────────────────────────────────────────
