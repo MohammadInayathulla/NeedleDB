@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NeedleDB</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d0d0d;
+      --surface:  #161616;
+      --surface2: #1e1e1e;
+      --border:   #2a2a2a;
+      --text:     #e8e8e8;
+      --text2:    #888;
+      --accent:   #3b82f6;
+      --green:    #22c55e;
+      --red:      #ef4444;
+      --yellow:   #f59e0b;
+      --pink:     #ec4899;
+      --purple:   #8b5cf6;
+      --cyan:     #06b6d4;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      height: 52px;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .logo { font-size: 18px; font-weight: 600; letter-spacing: -0.5px; }
+    .logo span { color: var(--accent); }
+
+    .header-right { display: flex; align-items: center; gap: 16px; }
+    .status-pill {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; color: var(--text2);
+    }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--red); }
+    .dot.on { background: var(--green); }
+
+    /* ── Layout ── */
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 24px;
+    }
+    .tab {
+      padding: 10px 20px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text2);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s;
+      user-select: none;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* ── Panels ── */
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .card-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text2);
+      margin-bottom: 14px;
+    }
+
+    /* ── Form ── */
+    label { display: block; font-size: 12px; color: var(--text2); margin-bottom: 5px; }
+    .field { margin-bottom: 12px; }
+
+    input, textarea, select {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 13px;
+      font-family: inherit;
+      padding: 8px 12px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+    textarea { resize: vertical; min-height: 100px; }
+
+    .row { display: flex; gap: 10px; align-items: flex-end; }
+    .row > * { flex: 1; }
+    .row > .btn { flex: 0 0 auto; }
+
+    /* ── Buttons ── */
+    .btn {
+      background: var(--accent);
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      font-family: inherit;
+      padding: 8px 16px;
+      transition: opacity 0.15s;
+      white-space: nowrap;
+    }
+    .btn:hover:not(:disabled) { opacity: 0.85; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn.ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn.danger { background: var(--red); }
+    .btn.sm { padding: 5px 10px; font-size: 12px; }
+    .btn.full { width: 100%; margin-top: 4px; }
+
+    /* ── Results ── */
+    .result {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 8px;
+    }
+    .result-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .result-id { font-weight: 600; font-size: 13px; }
+    .result-dist { font-size: 12px; color: var(--text2); font-family: monospace; }
+    .result-text { font-size: 13px; color: var(--text2); margin-top: 6px; line-height: 1.6; }
+
+    .tag {
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      color: var(--text2);
+      margin-right: 4px;
+    }
+    .tag.cs     { color: var(--accent); border-color: var(--accent); }
+    .tag.math   { color: var(--green);  border-color: var(--green);  }
+    .tag.food   { color: var(--yellow); border-color: var(--yellow); }
+    .tag.sports { color: var(--pink);   border-color: var(--pink);   }
+
+    /* ── Answer ── */
+    .answer {
+      background: var(--surface2);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 6px 6px 0;
+      padding: 14px 16px;
+      margin-top: 12px;
+      font-size: 14px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+    }
+
+    /* ── Benchmark ── */
+    .bench-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 14px;
+    }
+    .bench-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .bench-card.hnsw { border-color: var(--accent); }
+    .bench-algo { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text2); margin-bottom: 4px; }
+    .bench-time { font-size: 28px; font-weight: 600; }
+    .bench-unit { font-size: 12px; color: var(--text2); }
+    .bench-complexity { font-size: 11px; color: var(--text2); margin-top: 2px; font-family: monospace; }
+    .bench-hits { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+    .bench-hit { font-size: 12px; color: var(--text2); margin-bottom: 3px; }
+
+    .recall {
+      margin-top: 12px;
+      background: rgba(34,197,94,0.08);
+      border: 1px solid rgba(34,197,94,0.3);
+      border-radius: 6px;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .recall-label { font-size: 13px; color: var(--green); }
+    .recall-value { font-size: 20px; font-weight: 700; color: var(--green); }
+
+    /* ── PCA ── */
+    #pca-canvas {
+      width: 100%;
+      height: 440px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface2);
+      display: block;
+    }
+    .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── Doc list ── */
+    .doc-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 12px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-bottom: 6px;
+    }
+    .doc-name { font-size: 13px; font-weight: 500; }
+    .doc-meta { font-size: 11px; color: var(--text2); margin-top: 2px; }
+
+    /* ── Misc ── */
+    .empty { color: var(--text2); text-align: center; padding: 28px; font-size: 13px; }
+    .spinner {
+      display: inline-block; width: 13px; height: 13px;
+      border: 2px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+      vertical-align: middle; margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .msg { padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-top: 10px; }
+    .msg.ok  { background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3); color: #86efac; }
+    .msg.err { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #fca5a5; }
+    .mono { font-family: monospace; }
+  </style>
+</head>
+<body>
+
+<!-- ── HEADER ─────────────────────────────────────────────────────────── -->
+<header>
+  <div class="logo">🪡 Needle<span>DB</span></div>
+  <div class="header-right">
+    <div class="status-pill">
+      <div class="dot" id="ollama-dot"></div>
+      <span id="ollama-label">checking...</span>
+    </div>
+    <span style="font-size:12px;color:var(--text2);" id="vec-count">— vectors</span>
+    <button class="btn ghost sm" onclick="loadDemo()">Load Demo Data</button>
+  </div>
+</header>
+
+<!-- ── MAIN ───────────────────────────────────────────────────────────── -->
+<div class="container">
+  <div class="tabs">
+    <div class="tab active" onclick="go('search')">Search</div>
+    <div class="tab" onclick="go('docs')">Documents</div>
+    <div class="tab" onclick="go('ask')">Ask (RAG)</div>
+    <div class="tab" onclick="go('bench')">Benchmark</div>
+    <div class="tab" onclick="go('viz')">Visualize</div>
+  </div>
+
+  <!-- SEARCH -->
+  <div class="panel active" id="panel-search">
+    <div class="card">
+      <div class="card-title">Semantic Search</div>
+      <div class="field">
+        <label>Query (embedded via Ollama → HNSW search)</label>
+        <div class="row">
+          <input id="sq" type="text" placeholder="e.g. graph traversal algorithm" onkeydown="if(event.key==='Enter')search()" />
+          <select id="salgo" style="flex:0 0 130px">
+            <option value="hnsw">HNSW</option>
+            <option value="kdtree">KD-Tree</option>
+            <option value="brute_force">Brute Force</option>
+          </select>
+          <select id="smetric" style="flex:0 0 110px">
+            <option value="cosine">Cosine</option>
+            <option value="euclidean">Euclidean</option>
+            <option value="manhattan">Manhattan</option>
+          </select>
+          <input id="sk" type="number" value="5" min="1" max="20" style="flex:0 0 55px" />
+          <button class="btn" onclick="search()">Search</button>
+        </div>
+      </div>
+      <div id="search-out"></div>
+    </div>
+  </div>
+
+  <!-- DOCUMENTS -->
+  <div class="panel" id="panel-docs">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div class="card">
+        <div class="card-title">Add Document</div>
+        <div class="field"><label>Document ID</label><input id="did" placeholder="e.g. python_guide" /></div>
+        <div class="field"><label>Title (optional)</label><input id="dtitle" placeholder="Python Introduction" /></div>
+        <div class="field"><label>Content</label><textarea id="dtext" placeholder="Paste your document here..."></textarea></div>
+        <div class="row">
+          <div class="field"><label>Chunk size (words)</label><input id="dcs" type="number" value="200" /></div>
+          <div class="field"><label>Overlap</label><input id="dov" type="number" value="40" /></div>
+        </div>
+        <button class="btn full" onclick="addDoc()">Add Document</button>
+        <div id="doc-msg"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Documents <span id="doc-n" style="font-size:11px;font-weight:400;color:var(--text2)"></span></div>
+        <div id="doc-list"><div class="empty">No documents yet</div></div>
+        <button class="btn ghost sm" style="margin-top:10px;width:100%" onclick="listDocs()">Refresh</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RAG -->
+  <div class="panel" id="panel-ask">
+    <div class="card">
+      <div class="card-title">Ask Your Documents</div>
+      <div class="field">
+        <label>Question</label>
+        <div class="row">
+          <input id="rq" type="text" placeholder="e.g. Who created Python and when?" onkeydown="if(event.key==='Enter')ask()" />
+          <input id="rk" type="number" value="5" min="1" max="20" style="flex:0 0 55px" title="chunks to retrieve" />
+          <button class="btn" onclick="ask()">Ask</button>
+        </div>
+      </div>
+      <div id="rag-answer"></div>
+      <div id="rag-sources"></div>
+    </div>
+  </div>
+
+  <!-- BENCHMARK -->
+  <div class="panel" id="panel-bench">
+    <div class="card">
+      <div class="card-title">Algorithm Benchmark — all 3 on the same query</div>
+      <div class="field">
+        <label>Query vector (comma-separated floats)</label>
+        <input id="bvec" value="0.9,0.8,0.7,0.6,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1" />
+      </div>
+      <div class="row" style="margin-bottom:14px">
+        <div class="field"><label>k</label><input id="bk" type="number" value="3" /></div>
+        <div class="field"><label>Metric</label>
+          <select id="bmetric"><option value="cosine">Cosine</option><option value="euclidean">Euclidean</option></select>
+        </div>
+        <button class="btn" onclick="bench()">Run Benchmark</button>
+      </div>
+      <div id="bench-out"></div>
+    </div>
+  </div>
+
+  <!-- VISUALIZE -->
+  <div class="panel" id="panel-viz">
+    <div class="card">
+      <div class="card-title">PCA Scatter Plot — Vector Space Projection</div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:12px">
+        All stored vectors projected from N dimensions to 2D. Similar vectors cluster together.
+      </p>
+      <button class="btn ghost sm" style="margin-bottom:14px" onclick="drawPCA()">Refresh</button>
+      <canvas id="pca-canvas"></canvas>
+      <div class="legend" id="pca-legend"></div>
+      <p id="pca-var" style="font-size:11px;color:var(--text2);margin-top:8px"></p>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:8000';
+const COLORS = { cs:'#3b82f6', math:'#22c55e', food:'#f59e0b', sports:'#ec4899', default:'#8b5cf6', doc:'#06b6d4' };
+
+// ── Tab routing ────────────────────────────────────────────────────────
+const TABS = ['search','docs','ask','bench','viz'];
+function go(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', TABS[i]===name));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id===`panel-${name}`));
+  if (name==='docs') listDocs();
+  if (name==='viz')  drawPCA();
+}
+
+// ── Status ─────────────────────────────────────────────────────────────
+async function status() {
+  try {
+    const s = await (await fetch(`${API}/status`)).json();
+    const dot = document.getElementById('ollama-dot');
+    document.getElementById('ollama-label').textContent =
+      s.ollama === 'ONLINE' ? `Ollama · ${s.embed_model}` : 'Ollama offline';
+    dot.classList.toggle('on', s.ollama === 'ONLINE');
+  } catch { document.getElementById('ollama-label').textContent = 'Server offline'; }
+  try {
+    const h = await (await fetch(`${API}/health`)).json();
+    document.getElementById('vec-count').textContent = `${h.vectors} vectors`;
+  } catch {}
+}
+
+async function loadDemo() {
+  await fetch(`${API}/demo/load`, {method:'POST'});
+  await status();
+  drawPCA();
+}
+
+// ── Search ─────────────────────────────────────────────────────────────
+async function search() {
+  const q = document.getElementById('sq').value.trim();
+  const el = document.getElementById('search-out');
+  if (!q) return;
+  el.innerHTML = `<div class="empty"><span class="spinner"></span>Embedding & searching...</div>`;
+  try {
+    const ev = await post('/embed', { text: q });
+    const d  = await post('/search', {
+      vector: ev.vector,
+      k:      +document.getElementById('sk').value,
+      algo:   document.getElementById('salgo').value,
+      metric: document.getElementById('smetric').value,
+    });
+    if (!d.results?.length) { el.innerHTML = `<div class="empty">No results</div>`; return; }
+    el.innerHTML = `<p style="font-size:12px;color:var(--text2);margin-bottom:10px">${d.results.length} results · ${d.algo} · ${d.elapsed_ms}ms</p>` +
+      d.results.map(r => `
+      <div class="result">
+        <div class="result-row">
+          <span class="result-id">${r.id}</span>
+          <span class="result-dist">dist: ${r.distance}</span>
+        </div>
+        <div>
+          ${r.metadata.label    ? `<span class="tag ${r.metadata.category||''}">${r.metadata.label}</span>` : ''}
+          ${r.metadata.category ? `<span class="tag">${r.metadata.category}</span>` : ''}
+          ${r.metadata.doc_id   ? `<span class="tag">doc: ${r.metadata.doc_id}</span>` : ''}
+        </div>
+        ${r.metadata.text ? `<div class="result-text">${r.metadata.text.slice(0,220)}${r.metadata.text.length>220?'…':''}</div>` : ''}
+      </div>`).join('');
+  } catch(e) { el.innerHTML = msg(e,'err'); }
+}
+
+// ── Documents ──────────────────────────────────────────────────────────
+async function addDoc() {
+  const id = document.getElementById('did').value.trim();
+  const tx = document.getElementById('dtext').value.trim();
+  const el = document.getElementById('doc-msg');
+  if (!id||!tx) { el.innerHTML = msg('ID and text required','err'); return; }
+  el.innerHTML = `<div class="msg"><span class="spinner"></span>Chunking & embedding…</div>`;
+  try {
+    const d = await post('/documents/add', {
+      doc_id: id, text: tx,
+      metadata: { title: document.getElementById('dtitle').value.trim() },
+      chunk_size: +document.getElementById('dcs').value,
+      overlap:    +document.getElementById('dov').value,
+    });
+    el.innerHTML = msg(`✓ "${id}" added — ${d.chunks_created} chunks · ${d.dims}D`, 'ok');
+    listDocs();
+  } catch(e) { el.innerHTML = msg(e,'err'); }
+}
+
+async function listDocs() {
+  const d  = await (await fetch(`${API}/documents`)).json();
+  const el = document.getElementById('doc-list');
+  document.getElementById('doc-n').textContent = `(${d.total})`;
+  if (!d.documents?.length) { el.innerHTML = `<div class="empty">No documents</div>`; return; }
+  el.innerHTML = d.documents.map(doc => `
+    <div class="doc-item">
+      <div>
+        <div class="doc-name">${doc.doc_id}${doc.metadata.title ? ` — <span style="font-weight:400;color:var(--text2)">${doc.metadata.title}</span>` : ''}</div>
+        <div class="doc-meta">${doc.chunk_count} chunks</div>
+      </div>
+      <button class="btn danger sm" onclick="delDoc('${doc.doc_id}')">Delete</button>
+    </div>`).join('');
+}
+
+async function delDoc(id) {
+  await fetch(`${API}/documents/${encodeURIComponent(id)}`, {method:'DELETE'});
+  listDocs();
+}
+
+// ── RAG ────────────────────────────────────────────────────────────────
+async function ask() {
+  const q   = document.getElementById('rq').value.trim();
+  const aEl = document.getElementById('rag-answer');
+  const sEl = document.getElementById('rag-sources');
+  if (!q) return;
+  aEl.innerHTML = `<div class="empty"><span class="spinner"></span>Retrieving & generating… (10–30s on CPU)</div>`;
+  sEl.innerHTML = '';
+  try {
+    const d = await post('/rag/ask', { question: q, k: +document.getElementById('rk').value });
+    aEl.innerHTML = `<div class="answer">${d.answer}</div>`;
+    if (d.sources?.length) {
+      sEl.innerHTML = `<p style="font-size:12px;color:var(--text2);margin:14px 0 6px">Sources · retrieved in ${d.retrieval_ms}ms</p>` +
+        d.sources.map(s => `
+        <div class="result">
+          <div class="result-row">
+            <span class="result-id mono">${s.doc_id} · chunk ${s.chunk_index+1}/${s.total_chunks}</span>
+            <span class="result-dist">dist: ${s.distance}</span>
+          </div>
+          <div class="result-text">${s.text.slice(0,260)}${s.text.length>260?'…':''}</div>
+        </div>`).join('');
+    }
+  } catch(e) { aEl.innerHTML = msg(e,'err'); }
+}
+
+// ── Benchmark ──────────────────────────────────────────────────────────
+async function bench() {
+  const el  = document.getElementById('bench-out');
+  const vec = document.getElementById('bvec').value.split(',').map(Number).filter(v=>!isNaN(v));
+  if (!vec.length) { el.innerHTML = msg('Invalid vector','err'); return; }
+  el.innerHTML = `<div class="empty"><span class="spinner"></span>Running all 3 algorithms…</div>`;
+  try {
+    const d = await post('/benchmark', { vector: vec, k: +document.getElementById('bk').value, metric: document.getElementById('bmetric').value });
+    const b = d.benchmark;
+    el.innerHTML = `
+      <div class="bench-grid">
+        ${['brute_force','kdtree','hnsw'].map(a => `
+        <div class="bench-card${a==='hnsw'?' hnsw':''}">
+          <div class="bench-algo">${a.replace('_',' ')}</div>
+          <div><span class="bench-time">${b[a].elapsed_ms}</span> <span class="bench-unit">ms</span></div>
+          <div class="bench-complexity">${a==='brute_force'?'O(N·d) exact':a==='kdtree'?'O(log N) exact':'O(log N) approx'}</div>
+          <div class="bench-hits">
+            ${b[a].results.map((r,i)=>`<div class="bench-hit">${i+1}. ${r.metadata.label||r.id} <span class="mono" style="float:right">${r.distance}</span></div>`).join('')}
+          </div>
+        </div>`).join('')}
+      </div>
+      <div class="recall">
+        <span class="recall-label">HNSW Recall vs Brute Force ground truth</span>
+        <span class="recall-value">${(d.hnsw_recall*100).toFixed(0)}%</span>
+      </div>`;
+  } catch(e) { el.innerHTML = msg(e,'err'); }
+}
+
+// ── PCA ────────────────────────────────────────────────────────────────
+async function drawPCA() {
+  try {
+    const d = await (await fetch(`${API}/pca`)).json();
+    const canvas = document.getElementById('pca-canvas');
+    const ctx    = canvas.getContext('2d');
+    const dpr    = window.devicePixelRatio||1;
+    canvas.width  = canvas.offsetWidth*dpr;
+    canvas.height = canvas.offsetHeight*dpr;
+    ctx.scale(dpr,dpr);
+    const W=canvas.offsetWidth, H=canvas.offsetHeight, P=44;
+    ctx.clearRect(0,0,W,H);
+
+    if (!d.points?.length) {
+      ctx.fillStyle='#555'; ctx.font='13px system-ui'; ctx.textAlign='center';
+      ctx.fillText('No vectors. Load demo data first.', W/2, H/2); return;
+    }
+
+    const xs=d.points.map(p=>p.x), ys=d.points.map(p=>p.y);
+    const xMin=Math.min(...xs),xMax=Math.max(...xs);
+    const yMin=Math.min(...ys),yMax=Math.max(...ys);
+    const sx=x=>P+(x-xMin)/(xMax-xMin+1e-9)*(W-P*2);
+    const sy=y=>H-P-(y-yMin)/(yMax-yMin+1e-9)*(H-P*2);
+
+    // Grid lines
+    ctx.strokeStyle='#222'; ctx.lineWidth=1;
+    ctx.beginPath();
+    ctx.moveTo(W/2,P); ctx.lineTo(W/2,H-P);
+    ctx.moveTo(P,H/2); ctx.lineTo(W-P,H/2);
+    ctx.stroke();
+
+    // Points
+    d.points.forEach(p => {
+      const cat  = p.metadata?.category || (p.metadata?.doc_id ? 'doc' : 'default');
+      const col  = COLORS[cat]||COLORS.default;
+      const x=sx(p.x), y=sy(p.y);
+      ctx.beginPath(); ctx.arc(x,y,7,0,Math.PI*2);
+      ctx.fillStyle=col+'28'; ctx.fill();
+      ctx.strokeStyle=col; ctx.lineWidth=2; ctx.stroke();
+      const label=p.metadata?.label||p.metadata?.title||p.id;
+      ctx.fillStyle='#bbb'; ctx.font='10px system-ui'; ctx.textAlign='center';
+      ctx.fillText(label.length>16?label.slice(0,14)+'…':label, x, y-11);
+    });
+
+    // Legend
+    const cats=[...new Set(d.points.map(p=>p.metadata?.category||'other'))];
+    document.getElementById('pca-legend').innerHTML =
+      cats.map(c=>`<div class="legend-item"><div class="legend-dot" style="background:${COLORS[c]||COLORS.default}"></div>${c}</div>`).join('');
+
+    if (d.explained_variance) {
+      document.getElementById('pca-var').textContent =
+        `PC1 explains ${(d.explained_variance[0]*100).toFixed(1)}% variance · PC2 explains ${(d.explained_variance[1]*100).toFixed(1)}% variance`;
+    }
+  } catch(e) { console.error('PCA error',e); }
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────
+async function post(path, body) {
+  const r = await fetch(`${API}${path}`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.detail||'Request failed');
+  return d;
+}
+
+function msg(e, type) {
+  const text = e instanceof Error ? e.message : e;
+  return `<div class="msg ${type}">${text}</div>`;
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────
+status();
+setInterval(status, 10000);
+</script>
+</body>
+</html>
