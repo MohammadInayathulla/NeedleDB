@@ -55,7 +55,7 @@ Interactive docs at http://localhost:8000/docs
 - [x] Day 3 — HNSW (Hierarchical Navigable Small World)
 - [x] Day 4 — Unified VectorDB interface + benchmark + demo data
 - [x] Day 5 — FastAPI REST server
-- [ ] Day 6 — Ollama embeddings
-- [ ] Day 7 — Document store + chunking
-- [ ] Day 8 — RAG pipeline
-- [ ] Day 9 — PCA visualization + Web UI
+- [x] Day 6 — Ollama client (real 768D text embeddings + LLM generation)
+- [x] Day 7 — Document store + text chunking pipeline
+- [x] Day 8 — RAG pipeline (retrieval + grounded generation)
+- [x] Day 9 — PCA visualization + Web UI
