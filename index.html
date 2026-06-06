@@ -423,28 +423,26 @@ async function search() {
   if (!q) return;
   el.innerHTML = `<div class="empty"><span class="spinner"></span>Embedding & searching...</div>`;
   try {
-    const ev = await post('/embed', { text: q });
-    const d  = await post('/search', {
-      vector: ev.vector,
+    const d  = await post('/documents/search', {
+      query:  q,
       k:      +document.getElementById('sk').value,
       algo:   document.getElementById('salgo').value,
       metric: document.getElementById('smetric').value,
     });
     if (!d.results?.length) { el.innerHTML = `<div class="empty">No results</div>`; return; }
     el.innerHTML = `<p style="font-size:12px;color:var(--text2);margin-bottom:10px">${d.results.length} results · ${d.algo} · ${d.elapsed_ms}ms</p>` +
-      d.results.map(r => `
-      <div class="result">
-        <div class="result-row">
-          <span class="result-id">${r.id}</span>
-          <span class="result-dist">dist: ${r.distance}</span>
-        </div>
-        <div>
-          ${r.metadata.label    ? `<span class="tag ${r.metadata.category||''}">${r.metadata.label}</span>` : ''}
-          ${r.metadata.category ? `<span class="tag">${r.metadata.category}</span>` : ''}
-          ${r.metadata.doc_id   ? `<span class="tag">doc: ${r.metadata.doc_id}</span>` : ''}
-        </div>
-        ${r.metadata.text ? `<div class="result-text">${r.metadata.text.slice(0,220)}${r.metadata.text.length>220?'…':''}</div>` : ''}
-      </div>`).join('');
+  d.results.map(r => `
+  <div class="result">
+    <div class="result-row">
+      <span class="result-id">${r.chunk_id || r.id}</span>
+      <span class="result-dist">dist: ${r.distance}</span>
+    </div>
+    <div>
+      ${r.doc_id ? `<span class="tag">doc: ${r.doc_id}</span>` : ''}
+      ${r.chunk_index !== undefined ? `<span class="tag">chunk ${r.chunk_index + 1}/${r.total_chunks}</span>` : ''}
+    </div>
+    ${r.text ? `<div class="result-text">${r.text.slice(0,220)}${r.text.length>220?'…':''}</div>` : ''}
+  </div>`).join('');
   } catch(e) { el.innerHTML = msg(e,'err'); }
 }
 
