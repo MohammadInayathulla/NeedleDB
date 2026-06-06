@@ -450,6 +450,42 @@ def rag_ask(body: dict):
 
     return result
 
+# ── PCA Visualization ──────────────────────────────────────────────────
+
+@app.get("/pca", tags=["Visualize"])
+def pca_projection():
+    """
+    Project all stored vectors to 2D using PCA.
+    Returns x, y coordinates + metadata for each vector.
+    Used by the Web UI scatter plot.
+    """
+    if len(db) == 0:
+        return {"points": [], "explained_variance": [0.0, 0.0], "total": 0}
+
+    ids     = list(db._items.keys())
+    vectors = np.array(
+        [db._items[id]["vector"] for id in ids],
+        dtype=np.float32
+    )
+
+    projected, explained = pca_2d(vectors)
+
+    points = [
+        {
+            "id":       ids[i],
+            "x":        float(projected[i, 0]),
+            "y":        float(projected[i, 1]),
+            "metadata": db._items[ids[i]]["metadata"],
+        }
+        for i in range(len(ids))
+    ]
+
+    return {
+        "points":             points,
+        "explained_variance": [round(float(e), 4) for e in explained],
+        "total":              len(points),
+    }
+
 
 # ── Entry point ────────────────────────────────────────────────────────────
 
