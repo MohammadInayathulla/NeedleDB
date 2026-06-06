@@ -2,6 +2,7 @@ import numpy as np
 from needledb.ollama_client import OllamaClient
 from needledb.document_db import DocumentDB
 from needledb.rag import RAGPipeline
+from needledb.pca import pca_2d
 import uvicorn
 from typing import Any, Dict, List, Optional
 
