@@ -3,6 +3,7 @@ from needledb.ollama_client import OllamaClient
 from needledb.document_db import DocumentDB
 from needledb.rag import RAGPipeline
 from needledb.pca import pca_2d
+from fastapi.responses import FileResponse
 import uvicorn
 from typing import Any, Dict, List, Optional
 
@@ -21,6 +22,10 @@ app = FastAPI(
     version     = "0.5.0",
 )
 
+@app.get("/ui", include_in_schema=False)
+def serve_ui():
+    return FileResponse("index.html")
+
 # Allow the frontend (index.html) to talk to this server
 app.add_middleware(
     CORSMiddleware,
@@ -34,7 +39,8 @@ app.add_middleware(
 
 db = VectorDB(M=16, ef_construction=200, ef_search=50)
 ollama = OllamaClient()
-doc_db = DocumentDB(db=db, ollama=ollama)
+doc_vector_db = VectorDB(M=16, ef_construction=200, ef_search=50)
+doc_db = DocumentDB(db=doc_vector_db, ollama=ollama)
 rag = RAGPipeline(doc_db=doc_db, ollama=ollama)
 
 # ── Request / Response models ──────────────────────────────────────────────
@@ -490,4 +496,9 @@ def pca_projection():
 # ── Entry point ────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    print("\n🪡 NeedleDB is starting...")
+    print("━" * 40)
+    print("  UI       →  http://localhost:8000/ui")
+    print("  API Docs →  http://localhost:8000/docs")
+    print("━" * 40 + "\n")
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
