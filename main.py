@@ -460,17 +460,12 @@ def rag_ask(body: dict):
 
 @app.get("/pca", tags=["Visualize"])
 def pca_projection():
-    """
-    Project all stored vectors to 2D using PCA.
-    Returns x, y coordinates + metadata for each vector.
-    Used by the Web UI scatter plot.
-    """
-    if len(db) == 0:
+    if len(doc_vector_db) == 0:
         return {"points": [], "explained_variance": [0.0, 0.0], "total": 0}
 
-    ids     = list(db._items.keys())
+    ids     = list(doc_vector_db._items.keys())
     vectors = np.array(
-        [db._items[id]["vector"] for id in ids],
+        [doc_vector_db._items[id]["vector"] for id in ids],
         dtype=np.float32
     )
 
@@ -481,7 +476,7 @@ def pca_projection():
             "id":       ids[i],
             "x":        float(projected[i, 0]),
             "y":        float(projected[i, 1]),
-            "metadata": db._items[ids[i]]["metadata"],
+            "metadata": doc_vector_db._items[ids[i]]["metadata"],
         }
         for i in range(len(ids))
     ]
@@ -492,7 +487,30 @@ def pca_projection():
         "total":              len(points),
     }
 
+@app.post("/doc-benchmark", tags=["Search"])
+def doc_benchmark(body: dict):
+    """Benchmark all 3 algorithms on the document index using an embedded query."""
+    vector = body.get("vector", [])
+    k      = body.get("k", 3)
+    metric = body.get("metric", "cosine")
 
+    if not vector:
+        raise HTTPException(status_code=400, detail="Vector required.")
+    if len(doc_vector_db) == 0:
+        raise HTTPException(status_code=400, detail="No documents added yet.")
+
+    q      = np.array(vector, dtype=np.float32)
+    report = {}
+
+    for algo in ("brute_force", "kdtree", "hnsw"):
+        results, elapsed = getattr(doc_vector_db, algo).search(q, k=k, metric=metric)
+        report[algo] = {"results": results, "elapsed_ms": elapsed}
+
+    bf_ids   = {r["id"] for r in report["brute_force"]["results"]}
+    hnsw_ids = {r["id"] for r in report["hnsw"]["results"]}
+    recall   = len(bf_ids & hnsw_ids) / len(bf_ids) if bf_ids else 1.0
+
+    return {"benchmark": report, "hnsw_recall": round(recall, 4)}
 # ── Entry point ────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
