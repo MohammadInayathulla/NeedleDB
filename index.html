@@ -348,31 +348,30 @@
     </div>
   </div>
 
-  <!-- BENCHMARK -->
-  <div class="panel" id="panel-bench">
-    <div class="card">
-      <div class="card-title">Algorithm Benchmark — all 3 on the same query</div>
-      <div class="field">
-        <label>Query vector (comma-separated floats)</label>
-        <input id="bvec" value="0.9,0.8,0.7,0.6,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1" />
-      </div>
-      <div class="row" style="margin-bottom:14px">
-        <div class="field"><label>k</label><input id="bk" type="number" value="3" /></div>
-        <div class="field"><label>Metric</label>
-          <select id="bmetric"><option value="cosine">Cosine</option><option value="euclidean">Euclidean</option></select>
-        </div>
-        <button class="btn" onclick="bench()">Run Benchmark</button>
-      </div>
-      <div id="bench-out"></div>
+ <!-- BENCHMARK -->
+<div class="panel" id="panel-bench">
+  <div class="card">
+    <div class="card-title">Algorithm Benchmark — based on your last RAG question</div>
+    <div id="bench-last-query" style="font-size:13px;color:var(--text2);margin-bottom:14px;padding:10px 14px;background:var(--surface2);border-radius:6px;border:1px solid var(--border)">
+      Ask a question in the RAG tab first, then come back here.
     </div>
+    <div class="row" style="margin-bottom:14px">
+      <div class="field"><label>k</label><input id="bk" type="number" value="3" /></div>
+      <div class="field"><label>Metric</label>
+        <select id="bmetric"><option value="cosine">Cosine</option><option value="euclidean">Euclidean</option></select>
+      </div>
+      <button class="btn" onclick="bench()">Re-run</button>
+    </div>
+    <div id="bench-out"></div>
   </div>
+</div>
 
   <!-- VISUALIZE -->
   <div class="panel" id="panel-viz">
     <div class="card">
       <div class="card-title">PCA Scatter Plot — Vector Space Projection</div>
       <p style="font-size:13px;color:var(--text2);margin-bottom:12px">
-        All stored vectors projected from N dimensions to 2D. Similar vectors cluster together.
+       Your document chunks projected from 768D to 2D using PCA. Add documents to see semantic clusters form in real time.
       </p>
       <button class="btn ghost sm" style="margin-bottom:14px" onclick="drawPCA()">Refresh</button>
       <canvas id="pca-canvas"></canvas>
@@ -384,15 +383,23 @@
 
 <script>
 const API = 'http://localhost:8000';
-const COLORS = { cs:'#3b82f6', math:'#22c55e', food:'#f59e0b', sports:'#ec4899', default:'#8b5cf6', doc:'#06b6d4' };
+let lastRAGQuery = null;
+const PALETTE = ['#3b82f6','#22c55e','#f59e0b','#ec4899','#8b5cf6','#06b6d4','#f97316','#84cc16'];
 
 // ── Tab routing ────────────────────────────────────────────────────────
 const TABS = ['search','docs','ask','bench','viz'];
 function go(name) {
   document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', TABS[i]===name));
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id===`panel-${name}`));
-  if (name==='docs') listDocs();
-  if (name==='viz')  drawPCA();
+ if (name==='docs')  listDocs();
+ if (name==='viz')   drawPCA();
+ if (name==='bench') {
+  const el = document.getElementById('bench-last-query');
+  if (lastRAGQuery) {
+    el.innerHTML = `Benchmarking: <strong style="color:var(--text)">"${lastRAGQuery}"</strong>`;
+    bench();
+  }
+}
 }
 
 // ── Status ─────────────────────────────────────────────────────────────
@@ -488,6 +495,7 @@ async function delDoc(id) {
 // ── RAG ────────────────────────────────────────────────────────────────
 async function ask() {
   const q   = document.getElementById('rq').value.trim();
+  lastRAGQuery = q;
   const aEl = document.getElementById('rag-answer');
   const sEl = document.getElementById('rag-sources');
   if (!q) return;
@@ -512,12 +520,19 @@ async function ask() {
 
 // ── Benchmark ──────────────────────────────────────────────────────────
 async function bench() {
-  const el  = document.getElementById('bench-out');
-  const vec = document.getElementById('bvec').value.split(',').map(Number).filter(v=>!isNaN(v));
-  if (!vec.length) { el.innerHTML = msg('Invalid vector','err'); return; }
-  el.innerHTML = `<div class="empty"><span class="spinner"></span>Running all 3 algorithms…</div>`;
+  const el = document.getElementById('bench-out');
+  if (!lastRAGQuery) {
+    el.innerHTML = msg('Ask a question in the RAG tab first', 'err');
+    return;
+  }
+  el.innerHTML = `<div class="empty"><span class="spinner"></span>Embedding query & racing all 3 algorithms…</div>`;
   try {
-    const d = await post('/benchmark', { vector: vec, k: +document.getElementById('bk').value, metric: document.getElementById('bmetric').value });
+    const ev = await post('/embed', { text: lastRAGQuery });
+    const d  = await post('/doc-benchmark', {
+      vector: ev.vector,
+      k:      +document.getElementById('bk').value,
+      metric: document.getElementById('bmetric').value,
+    });
     const b = d.benchmark;
     el.innerHTML = `
       <div class="bench-grid">
@@ -527,7 +542,10 @@ async function bench() {
           <div><span class="bench-time">${b[a].elapsed_ms}</span> <span class="bench-unit">ms</span></div>
           <div class="bench-complexity">${a==='brute_force'?'O(N·d) exact':a==='kdtree'?'O(log N) exact':'O(log N) approx'}</div>
           <div class="bench-hits">
-            ${b[a].results.map((r,i)=>`<div class="bench-hit">${i+1}. ${r.metadata.label||r.id} <span class="mono" style="float:right">${r.distance}</span></div>`).join('')}
+            ${b[a].results.map((r,i)=>`
+            <div class="bench-hit">${i+1}. ${r.chunk_id||r.id}
+              <span class="mono" style="float:right">${r.distance}</span>
+            </div>`).join('')}
           </div>
         </div>`).join('')}
       </div>
@@ -569,29 +587,39 @@ async function drawPCA() {
     ctx.moveTo(P,H/2); ctx.lineTo(W-P,H/2);
     ctx.stroke();
 
-    // Points
-    d.points.forEach(p => {
-      const cat  = p.metadata?.category || (p.metadata?.doc_id ? 'doc' : 'default');
-      const col  = COLORS[cat]||COLORS.default;
-      const x=sx(p.x), y=sy(p.y);
-      ctx.beginPath(); ctx.arc(x,y,7,0,Math.PI*2);
-      ctx.fillStyle=col+'28'; ctx.fill();
-      ctx.strokeStyle=col; ctx.lineWidth=2; ctx.stroke();
-      const label=p.metadata?.label||p.metadata?.title||p.id;
-      ctx.fillStyle='#bbb'; ctx.font='10px system-ui'; ctx.textAlign='center';
-      ctx.fillText(label.length>16?label.slice(0,14)+'…':label, x, y-11);
-    });
+    // Build color map — one color per unique doc_id
+const docIds = [...new Set(d.points.map(p => p.metadata?.doc_id || p.metadata?.category || 'other'))];
+const colorMap = {};
+const titleMap = {};
+docIds.forEach((id, i) => {
+  colorMap[id] = PALETTE[i % PALETTE.length];
+  const pt = d.points.find(p => (p.metadata?.doc_id || p.metadata?.category || 'other') === id);
+  titleMap[id] = pt?.metadata?.title || id;
+});
 
+// Points
+d.points.forEach(p => {
+  const key  = p.metadata?.doc_id || p.metadata?.category || 'other';
+  const col  = colorMap[key] || PALETTE[0];
+  const x=sx(p.x), y=sy(p.y);
+  ctx.beginPath(); ctx.arc(x,y,7,0,Math.PI*2);
+  ctx.fillStyle=col+'28'; ctx.fill();
+  ctx.strokeStyle=col; ctx.lineWidth=2; ctx.stroke();
+  const label=p.metadata?.label||p.metadata?.title||p.id;
+  ctx.fillStyle='#bbb'; ctx.font='10px system-ui'; ctx.textAlign='center';
+  ctx.fillText(label.length>16?label.slice(0,14)+'…':label, x, y-11);
+});
+
+    
     // Legend
-    const cats=[...new Set(d.points.map(p=>p.metadata?.category||'other'))];
-    document.getElementById('pca-legend').innerHTML =
-      cats.map(c=>`<div class="legend-item"><div class="legend-dot" style="background:${COLORS[c]||COLORS.default}"></div>${c}</div>`).join('');
+document.getElementById('pca-legend').innerHTML =
+  docIds.map(id => `<div class="legend-item"><div class="legend-dot" style="background:${colorMap[id]}"></div>${titleMap[id]}</div>`).join('');
 
-    if (d.explained_variance) {
-      document.getElementById('pca-var').textContent =
-        `PC1 explains ${(d.explained_variance[0]*100).toFixed(1)}% variance · PC2 explains ${(d.explained_variance[1]*100).toFixed(1)}% variance`;
-    }
-  } catch(e) { console.error('PCA error',e); }
+if (d.explained_variance) {
+  document.getElementById('pca-var').textContent =
+    `PC1 explains ${(d.explained_variance[0]*100).toFixed(1)}% variance · PC2 explains ${(d.explained_variance[1]*100).toFixed(1)}% variance`;
+}
+} catch(e) { console.error('PCA error',e); }
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────
