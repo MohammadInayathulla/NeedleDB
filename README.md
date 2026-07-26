@@ -30,7 +30,7 @@ pip install -r requirements.txt
 python main.py
 ```
 
-Server starts at http://localhost:8000
+Server starts at http://localhost:8000/ui
 Interactive docs at http://localhost:8000/docs
 
 ## API Reference
